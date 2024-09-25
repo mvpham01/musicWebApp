@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trình Phát Nhạc</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 10px;
+        }
+
+        .player-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 30px;
+            width: 100%;
+            max-width: 520px;
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .song-info {
+            text-align: center;
+            margin-bottom: 10px;
+            margin-top: 15px;
+        }
+
+        .song-title {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .progress-container {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            height: 6px;
+            width: 100%;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+
+        .progress {
+            background: #fff;
+            border-radius: 5px;
+            height: 100%;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .controls button {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 10px;
+            margin: 0 15px;
+        }
+
+        .controls button:focus {
+            outline: none;
+        }
+
+        .controls button:hover {
+            color: #ddd;
+        }
+
+        #visualizer {
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        #playlist {
+            list-style-type: none;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        #playlist li {
+            padding: 10px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        #playlist li:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #playlist li.active {
+            background: rgba(255, 255, 255, 0.3);
+            font-weight: bold;
+        }
+
+        #playlist::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        #playlist::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #playlist::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+        }
+
+        .volume-container,
+        .speed-container {
+            display: none;
+            align-items: center;
+            margin-top: 10px;
+            justify-content: space-between;
+            color: #fff;
+        }
+
+        .volume-container input,
+        .speed-container input {
+            width: 70%;
+            cursor: pointer;
+        }
+
+        .volume-container label,
+        .speed-container label {
+            font-size: 16px;
+        }
+
+        #search-bar {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            border: none;
+            font-size: 16px;
+        }
+
+        #search-bar:focus {
+            outline: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="player-container">
+        <input type="text" id="search-bar" placeholder="Tìm kiếm bài hát hoặc nghệ sĩ...">
+        <div class="song-info">
+            <div class="song-title">Đang tải...</div>
+        </div>
+        <canvas id="visualizer"></canvas>
+        <div class="progress-container" id="progress-container">
+            <div class="progress" id="progress"></div>
+        </div>
+        <div class="controls">
+            <button id="shuffle"><i class="fas fa-random"></i></button>
+            <button id="repeat"><i class="fas fa-redo"></i></button>
+            <button id="prev"><i class="fas fa-step-backward"></i></button>
+            <button id="play"><i class="fas fa-play"></i></button>
+            <button id="pause" style="display:none;"><i class="fas fa-pause"></i></button>
+            <button id="next"><i class="fas fa-step-forward"></i></button>
+            <button id="volume-toggle"><i class="fas fa-volume-up"></i></button>
+            <button id="speed-toggle"><i class="fas fa-tachometer-alt"></i></button>
+        </div>
+
+        <div class="volume-container">
+            <label for="volume-slider">Âm lượng:</label>
+            <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="1">
+        </div>
+
+        <div class="speed-container">
+            <label for="speed-slider">Tốc độ:</label>
+            <input type="range" id="speed-slider" min="0.5" max="2" step="0.1" value="1">
+        </div>
+
+        <ul id="playlist"></ul>
+    </div>
+
+    <audio id="audio"></audio>
+
+
+    <script>
+        const searchBar = document.getElementById('search-bar');
+        searchBar.addEventListener('input', searchSongs);
+
+        function searchSongs() {
+            const query = searchBar.value.toLowerCase();
+            const filteredSongs = songs.filter(song => song.toLowerCase().includes(query));
+
+            playlist.innerHTML = '';
+            filteredSongs.forEach((song, index) => {
+                const li = document.createElement('li');
+                li.textContent = song;
+                li.onclick = () => playSong(index);
+                playlist.appendChild(li);
+            });
+        }
+
+        const audio = document.getElementById('audio');
+        const playlist = document.getElementById('playlist');
+        const prevButton = document.getElementById('prev');
+        const playButton = document.getElementById('play');
+        const pauseButton = document.getElementById('pause');
+        const nextButton = document.getElementById('next');
+        const progress = document.getElementById('progress');
+        const progressContainer = document.getElementById('progress-container');
+        const songTitle = document.querySelector('.song-title');
+
+        const volumeSlider = document.getElementById('volume-slider');
+        const speedSlider = document.getElementById('speed-slider');
+        const canvas = document.getElementById('visualizer');
+        const canvasContext = canvas.getContext('2d');
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioContext.createAnalyser();
+
+        const source = audioContext.createMediaElementSource(audio);
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+        analyser.fftSize = 256;
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        const shuffleButton = document.getElementById('shuffle');
+        const repeatButton = document.getElementById('repeat');
+        let isShuffle = false;
+        let isRepeat = false;
+        const volumeToggle = document.getElementById('volume-toggle');
+        const speedToggle = document.getElementById('speed-toggle');
+        const volumeContainer = document.querySelector('.volume-container');
+        const speedContainer = document.querySelector('.speed-container');
+
+        volumeToggle.onclick = () => {
+            volumeContainer.style.display = volumeContainer.style.display === 'none' ? 'flex' : 'none';
+            speedContainer.style.display = 'none';
+        };
+
+        speedToggle.onclick = () => {
+            speedContainer.style.display = speedContainer.style.display === 'none' ? 'flex' : 'none';
+            volumeContainer.style.display = 'none';
+        };
+        shuffleButton.onclick = () => {
+            isShuffle = !isShuffle;
+            shuffleButton.classList.toggle('active', isShuffle);
+        };
+
+        repeatButton.onclick = () => {
+            isRepeat = !isRepeat;
+            repeatButton.classList.toggle('active', isRepeat);
+        };
+
+        audio.addEventListener('ended', () => {
+            if (isRepeat) {
+                playSong(currentSongIndex);
+            } else if (isShuffle) {
+                playSong(Math.floor(Math.random() * songs.length));
+            } else {
+                playSong(currentSongIndex + 1);
+            }
+        });
+        function drawVisualizer() {
+            requestAnimationFrame(drawVisualizer);
+            analyser.getByteFrequencyData(dataArray);
+
+            canvasContext.clearRect(0, 0, canvas.width, canvas.height);
+            const barWidth = (canvas.width / bufferLength) * 2.5;
+            let barHeight;
+            let x = 0;
+
+            for (let i = 0; i < bufferLength; i++) {
+                barHeight = dataArray[i];
+                canvasContext.fillStyle = 'rgb(' + (barHeight + 100) + ',50,50)';
+                canvasContext.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
+                x += barWidth + 1;
+            }
+        }
+
+        audio.addEventListener('play', () => {
+            audioContext.resume().then(() => {
+                drawVisualizer();
+            });
+        });
+        let songs = [];
+        let currentSongIndex = 0;
+
+        function getSongsFromDirectory() {
+            return fetch('/songs')
+                .then(response => response.json())
+                .catch(err => {
+                    console.error('Không thể tải danh sách nhạc', err);
+                    return [];
+                });
+        }
+
+        function loadPlaylist() {
+            getSongsFromDirectory().then(fetchedSongs => {
+                songs = fetchedSongs;
+                playlist.innerHTML = '';
+                songs.forEach((song, index) => {
+                    const li = document.createElement('li');
+                    li.textContent = song;
+                    li.onclick = () => playSong(index);
+                    playlist.appendChild(li);
+                });
+                if (songs.length > 0) {
+                    playSong(0);
+                }
+            });
+        }
+
+        function playSong(index) {
+            if (index >= 0 && index < songs.length) {
+                currentSongIndex = index;
+                audio.src = `/music/${songs[currentSongIndex]}`;
+                audio.volume = volumeSlider.value;  // Đảm bảo âm lượng giữ nguyên
+                audio.playbackRate = speedSlider.value;  // Giữ nguyên tốc độ phát
+                audio.play().catch(e => console.error('Lỗi khi phát nhạc:', e));
+                updatePlaylist();
+                updateSongTitle();
+                updatePlayPauseButton();
+            }
+        }
+
+        function updatePlaylist() {
+            Array.from(playlist.children).forEach((item, index) => {
+                item.classList.toggle('active', index === currentSongIndex);
+            });
+        }
+
+        function updateSongTitle() {
+            songTitle.textContent = songs[currentSongIndex] || 'Không có bài hát';
+        }
+
+        function updatePlayPauseButton() {
+            if (audio.paused) {
+                playButton.style.display = 'inline-block';
+                pauseButton.style.display = 'none';
+            } else {
+                playButton.style.display = 'none';
+                pauseButton.style.display = 'inline-block';
+            }
+        }
+
+        function updateProgress(e) {
+            const { duration, currentTime } = e.srcElement;
+            const progressPercent = (currentTime / duration) * 100;
+            progress.style.width = `${progressPercent}%`;
+        }
+
+        function setProgress(e) {
+            const width = this.clientWidth;
+            const clickX = e.offsetX;
+            const duration = audio.duration;
+            audio.currentTime = (clickX / width) * duration;
+        }
+
+        prevButton.onclick = () => playSong(currentSongIndex - 1);
+        nextButton.onclick = () => playSong(currentSongIndex + 1);
+        playButton.onclick = () => {
+            audio.play();
+            updatePlayPauseButton();
+        };
+        pauseButton.onclick = () => {
+            audio.pause();
+            updatePlayPauseButton();
+        };
+
+        audio.addEventListener('timeupdate', updateProgress);
+        audio.addEventListener('ended', () => playSong(currentSongIndex + 1));
+        audio.addEventListener('play', updatePlayPauseButton);
+        audio.addEventListener('pause', updatePlayPauseButton);
+
+        progressContainer.addEventListener('click', setProgress);
+
+        // Cập nhật âm lượng khi người dùng thay đổi giá trị trên thanh trượt
+        volumeSlider.addEventListener('input', () => {
+            audio.volume = volumeSlider.value;
+        });
+
+        // Cập nhật tốc độ phát khi người dùng thay đổi giá trị trên thanh trượt
+        speedSlider.addEventListener('input', () => {
+            audio.playbackRate = speedSlider.value;
+        });
+        document.addEventListener('keydown', (e) => {
+            switch (e.code) {
+                case 'Space':
+                    e.preventDefault();
+                    if (audio.paused) {
+                        audio.play();
+                    } else {
+                        audio.pause();
+                    }
+                    break;
+                case 'ArrowRight':
+                    playSong(currentSongIndex + 1);
+                    break;
+                case 'ArrowLeft':
+                    playSong(currentSongIndex - 1);
+                    break;
+                case 'ArrowUp':
+                    audio.volume = Math.min(audio.volume + 0.1, 1);
+                    volumeSlider.value = audio.volume;
+                    break;
+                case 'ArrowDown':
+                    audio.volume = Math.max(audio.volume - 0.1, 0);
+                    volumeSlider.value = audio.volume;
+                    break;
+            }
+        });
+        loadPlaylist();
+    </script>
+</body>
+
+</html>
